@@ -25,11 +25,16 @@ else if(choice.Equals("j", StringComparison.CurrentCultureIgnoreCase))
     Console.WriteLine("Scanning for nearby devices...");
     var devices = bt.DiscoverDevices();
 
-    for (int i = 0; i < devices.Count(); i++)
+    for (int i = 0; i < devices.Count; i++)
         Console.WriteLine($"[{i}] {devices.ElementAt(i).DeviceName} ({devices.ElementAt(i).DeviceAddress})");
 
     Console.Write("Pick the host number: ");
-    int pick = int.Parse(Console.ReadLine()!);
+    var isParsed = int.TryParse(Console.ReadLine() ?? "-1", out int pick);
+    if (!isParsed || pick < 0 || pick >= devices.Count)
+    {
+        Console.WriteLine("Invalid choice.");
+        return;
+    }
 
     bt.Connect(devices.ElementAt(pick).DeviceAddress, serviceId);
     stream = bt.GetStream();
@@ -50,7 +55,7 @@ _ = Task.Run(async () =>
 {
     string? line;
     while ((line = await reader.ReadLineAsync()) != null)
-        Console.WriteLine($"Them: {line}");
+        Console.WriteLine($"\nThem: {line}");
     Console.WriteLine("* They disconnected.");
 });
 
