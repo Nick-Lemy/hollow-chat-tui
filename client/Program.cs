@@ -42,8 +42,6 @@ using var window = new Window() {
 
 var currentRoom = chat.GetRoomById(selectedRoomId);
 
-// Left sidebar: the rooms this user is a member of (i.e. can read from). The
-// room you're currently viewing is marked with ">"; private rooms with "*".
 var roomsPanel = new FrameView()
 {
     Title = "My Rooms",
@@ -66,7 +64,6 @@ void RefreshRoomsList()
 RefreshRoomsList();
 roomsPanel.Add(roomsList);
 
-// Top frame: shows which room you're in and who's in it.
 var roomPanel = new FrameView()
 {
     Title = "Room",
@@ -89,7 +86,7 @@ var messagesPanel = new FrameView()
     Title = "Messages",
     X = Pos.Right(roomsPanel), Y = Pos.Bottom(roomPanel),
     Width = Dim.Fill(),
-    Height = Dim.Fill(3),   // fill the space between the room frame and the input frame
+    Height = Dim.Fill(3),
 };
 messagesPanel.VerticalScrollBar.Visible = true;
 
@@ -131,9 +128,6 @@ inputPanel.Add(textField);
 
 window.Add(roomsPanel, roomPanel, messagesPanel, inputPanel);
 
-// --- Theme (Catppuccin Mocha) -------------------------------------------------
-// Each panel gets an accent-colored border/title; content stays in a soft
-// readable foreground on the dark base so messages are easy to read.
 var baseBg  = new Color("#1e1e2e");
 var surface = new Color("#313244");
 var text    = new Color("#cdd6f4");
@@ -142,7 +136,6 @@ var green   = new Color("#a6e3a1");
 var mauve   = new Color("#cba6f7");
 var peach   = new Color("#fab387");
 
-// Accent scheme: colored border/title, inverted when focused.
 Scheme Accent(Color c) => new()
 {
     Normal    = new Attribute(c, baseBg),
@@ -170,9 +163,6 @@ textField.SetScheme(new Scheme
     Focus  = new Attribute(text, surface),
 });
 
-// Only show messages addressed to the room we're currently in — a user should
-// never see traffic from other rooms. (See note below: real isolation must also
-// happen on the server; this is the client-side half.)
 chat.MessageReceived += msg => app.Invoke(() =>
 {
     if (msg.RoomId == selectedRoomId)
@@ -248,7 +238,6 @@ Guid SelectRoom(IChatService service)
             return newRoomId;
         }
 
-        // Default: join.
         Console.Write("Room name to join [General]: ");
         var joinName = (Console.ReadLine() ?? "").Trim();
         if (joinName.Length == 0) joinName = "General";

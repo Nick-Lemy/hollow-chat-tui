@@ -1,13 +1,16 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text.Json;
 
 namespace Chat;
 
 public static class Server
 {
     private const int Port = 11_000;
-    private static readonly List<StreamWriter> Writers = [];
-    private static readonly Lock WritersLock = new();
+    private static readonly Dictionary<StreamWriter, Guid> RoomByWriter = [];
+    private static readonly Lock Gate = new();
+
+    private static readonly JsonSerializerOptions JsonOptions = new() { PropertyNameCaseInsensitive = true };
 
     public static async Task Run()
     {
@@ -34,19 +37,24 @@ public static class Server
         var reader = new StreamReader(stream);
         var writer = new StreamWriter(stream) { AutoFlush = true };
 
-        lock (WritersLock) Writers.Add(writer);
+        lock (Gate) RoomByWriter[writer] = Guid.Empty;
 
         try
         {
             string? line;
             while ((line = await reader.ReadLineAsync()) != null)
             {
-                Broadcast(line, except: writer);
+                Envelope? envelope;
+                try { envelope = JsonSerializer.Deserialize<Envelope>(line, JsonOptions); }
+                catch (JsonException) { continue; }
+                if (envelope is null) continue;
+
+                lock (Gate) RoomByWriter[writer] = envelope.RoomId;
+                RouteToRoom(line, envelope.RoomId, except: writer);
             }
         }
         catch (IOException)
         {
-            Console.WriteLine($"Client disconnected: {remote}");
         }
         catch (Exception ex)
         {
@@ -54,19 +62,19 @@ public static class Server
         }
         finally
         {
-            lock (WritersLock) Writers.Remove(writer);
+            lock (Gate) RoomByWriter.Remove(writer);
             Console.WriteLine($"Client disconnected: {remote}");
         }
     }
 
-    private static void Broadcast(string message, StreamWriter except)
+    private static void RouteToRoom(string message, Guid roomId, StreamWriter except)
     {
-        lock (WritersLock)
+        lock (Gate)
         {
-            foreach (var w in Writers)
-            {
-                if (w != except) _ = w.WriteLineAsync(message);
-            }
+            foreach (var (w, room) in RoomByWriter)
+                if (room == roomId && w != except)
+                    _ = w.WriteLineAsync(message);
         }
     }
+    private sealed record Envelope(Guid RoomId);
 }
