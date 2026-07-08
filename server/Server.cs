@@ -6,9 +6,8 @@ namespace Chat;
 public static class Server
 {
     private const int Port = 11_000;
-
     private static readonly List<StreamWriter> Writers = [];
-    private static readonly object WritersLock = new();
+    private static readonly Lock WritersLock = new();
 
     public static async Task Run()
     {
