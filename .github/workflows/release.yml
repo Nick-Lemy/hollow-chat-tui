@@ -46,7 +46,7 @@ jobs:
             -p:PublishSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true \
             -p:EnableCompressionInSingleFile=true \
-            -p:AssemblyName=bankai-chat \
+            -p:AssemblyName=hollow-chat \
             -p:DebugType=none \
             -o "publish/${{ matrix.rid }}"
 
@@ -55,9 +55,9 @@ jobs:
           cd "publish/${{ matrix.rid }}"
           rm -f *.pdb
           if [ "${{ matrix.archive }}" = "zip" ]; then
-            zip -r "../../bankai-chat-${{ matrix.rid }}.zip" .
+            zip -r "../../hollow-chat-tui-${{ matrix.rid }}.zip" .
           else
-            tar -czf "../../bankai-chat-${{ matrix.rid }}.tar.gz" .
+            tar -czf "../../hollow-chat-tui-${{ matrix.rid }}.tar.gz" .
           fi
 
       - name: Upload to the GitHub Release
