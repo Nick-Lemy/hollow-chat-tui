@@ -1,7 +1,9 @@
 using Terminal.Gui.App;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
+using Terminal.Gui.Drawing;
 using Chat.Services;
+using Attribute = Terminal.Gui.Drawing.Attribute;
 
 Console.Write("Enter your name: ");
 var myName = Console.ReadLine() ?? "Anonymous";
@@ -128,6 +130,45 @@ var textField = new TextField()
 inputPanel.Add(textField);
 
 window.Add(roomsPanel, roomPanel, messagesPanel, inputPanel);
+
+// --- Theme (Catppuccin Mocha) -------------------------------------------------
+// Each panel gets an accent-colored border/title; content stays in a soft
+// readable foreground on the dark base so messages are easy to read.
+var baseBg  = new Color("#1e1e2e");
+var surface = new Color("#313244");
+var text    = new Color("#cdd6f4");
+var blue    = new Color("#89b4fa");
+var green   = new Color("#a6e3a1");
+var mauve   = new Color("#cba6f7");
+var peach   = new Color("#fab387");
+
+// Accent scheme: colored border/title, inverted when focused.
+Scheme Accent(Color c) => new()
+{
+    Normal    = new Attribute(c, baseBg),
+    HotNormal = new Attribute(c, baseBg),
+    Focus     = new Attribute(baseBg, c),
+    HotFocus  = new Attribute(baseBg, c),
+};
+var readable = new Scheme { Normal = new Attribute(text, baseBg) };
+
+window.SetScheme(readable);
+
+roomsPanel.SetScheme(Accent(green));
+roomsList.SetScheme(readable);
+
+roomPanel.SetScheme(Accent(mauve));
+roomInfo.SetScheme(readable);
+
+messagesPanel.SetScheme(Accent(blue));
+messages.SetScheme(readable);
+
+inputPanel.SetScheme(Accent(peach));
+textField.SetScheme(new Scheme
+{
+    Normal = new Attribute(text, surface),
+    Focus  = new Attribute(text, surface),
+});
 
 // Only show messages addressed to the room we're currently in — a user should
 // never see traffic from other rooms. (See note below: real isolation must also
