@@ -1,6 +1,6 @@
 using Chat.Models;
 
-namespace Chat;
+namespace Chat.Services;
 
 public interface IChatService : IAsyncDisposable
 {

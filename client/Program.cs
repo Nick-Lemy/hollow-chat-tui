@@ -1,8 +1,7 @@
 using Terminal.Gui.App;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
-using Chat;
-using Terminal.Gui.Text;
+using Chat.Services;
 
 Console.Write("Enter your name: ");
 var myName = Console.ReadLine() ?? "Anonymous";

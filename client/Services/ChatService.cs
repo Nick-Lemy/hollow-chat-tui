@@ -1,8 +1,9 @@
 using System.Net.Sockets;
 using System.Text.Json;
 using Chat.Models;
+using Chat.Services;
 
-namespace Chat;
+namespace Chat.Services;
 public sealed class ChatService : IChatService
 {
     public const int DefaultPort = 11_000;
