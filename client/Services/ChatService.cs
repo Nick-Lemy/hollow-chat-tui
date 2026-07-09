@@ -1,147 +1,151 @@
-using System.Net.Sockets;
-using System.Text.Json;
 using Chat.Models;
 
 namespace Chat.Services;
+
 public sealed class ChatService : IChatService
 {
-    public const int DefaultPort = 11_000;
-    public Room GeneralRoom => Rooms[0];
-    public List<Room> Rooms { get; } = [
-        new()
-        {
-            Name = "General",
-            Description = "The default room for all users.",
-            Members = ["Nick", "CR7", "Bob"]
-        },
-        new()
-        {
-            Name = "Bros",
-            Description = "A private room for bros only.",
-            Code = 1234
-        }
-    ];
-    private TcpClient? _client;
-    private StreamWriter? _writer;
+    private readonly ChatConnection _connection = new();
     private string _userName = "Anonymous";
-    public event Action<Message>? MessageReceived;
+
+    private TaskCompletionSource<RoomInfo[]>? _pendingRoomList;
+    private TaskCompletionSource<RoomInfo>? _pendingCreate;
+    private TaskCompletionSource<(RoomInfo, string[])>? _pendingJoin;
+
+    public ChatService()
+    {
+        _connection.EnvelopeReceived += Dispatch;
+        _connection.Closed += OnClosed;
+    }
+
+    public event Action<string, string>? MessageReceived;
+    public event Action<string>? UserJoined;
+    public event Action<string>? UserLeft;
     public event Action? Disconnected;
 
-    public string UserName {
+    public RoomInfo? CurrentRoom { get; private set; }
+
+    public string UserName
+    {
         get => _userName;
         set
         {
             if (string.IsNullOrWhiteSpace(value))
                 throw new ArgumentException("User name cannot be null or whitespace.", nameof(value));
             _userName = value;
-        }}
-
-    public bool IsConnected => _client?.Connected ?? false;
-
-    public void CreateRoom(string name, string description, int? code)
-    {
-        if(code < 1000 || code > 9999)
-            throw new ArgumentOutOfRangeException(nameof(code), "Room code must be between 1000 and 9999.");
-        if (string.IsNullOrWhiteSpace(name))
-            throw new ArgumentException("Room name cannot be null or whitespace.", nameof(name));
-        if (string.IsNullOrWhiteSpace(description))
-            throw new ArgumentException("Room description cannot be null or whitespace.", nameof(description));
-        Rooms.Add(new Room { Name = name, Description = description, Code = code ?? null });
+        }
     }
+
+    public bool IsConnected => _connection.IsConnected;
 
     public async Task ConnectAsync(string host, int port, CancellationToken cancellationToken = default)
     {
-        _client = new TcpClient();
-        await _client.ConnectAsync(host, port, cancellationToken);
-
-        var stream = _client.GetStream();
-        var reader = new StreamReader(stream);
-        _writer = new StreamWriter(stream) { AutoFlush = true };
-
-        _ = ReceiveLoopAsync(reader);
+        await _connection.ConnectAsync(host, port, cancellationToken);
+        await _connection.SendAsync(Envelope.Hello(UserName));
     }
 
-    public async Task SendAsync(string message, Guid? roomId)
+    public async Task<RoomInfo[]> GetRoomsAsync()
     {
-        if (_writer is null)
-            throw new InvalidOperationException("Not connected. Call ConnectAsync first.");
-
-        var chatMessage = new Message(UserName, message, timestamp: DateTimeOffset.UtcNow, roomid: roomId ?? GeneralRoom.Id);
-        await _writer.WriteLineAsync(JsonSerializer.Serialize(chatMessage));
+        var pending = NewRequest(out _pendingRoomList);
+        await _connection.SendAsync(Envelope.ListRooms());
+        return await pending;
     }
 
-    private async Task ReceiveLoopAsync(StreamReader reader)
+    public async Task<RoomInfo> CreateRoomAsync(string name, string description, int? code)
     {
-        try
+        var pending = NewRequest(out _pendingCreate);
+        await _connection.SendAsync(Envelope.CreateRoom(name, description, code));
+        return await pending;
+    }
+
+    public async Task<(RoomInfo Room, string[] Members)> JoinRoomAsync(Guid roomId, int? code)
+    {
+        var pending = NewRequest(out _pendingJoin);
+        await _connection.SendAsync(Envelope.JoinRoom(roomId, code));
+        return await pending;
+    }
+
+    public Task SendAsync(string text)
+    {
+        if (CurrentRoom is null)
+            throw new InvalidOperationException("Join a room before sending messages.");
+
+        return _connection.SendAsync(Envelope.SendMessage(CurrentRoom.Id, text));
+    }
+
+    private void Dispatch(Envelope envelope)
+    {
+        switch (envelope.Type)
         {
-            string? line;
-            while ((line = await reader.ReadLineAsync()) != null)
-            {
-                var message = JsonSerializer.Deserialize<Message>(line);
-                if (message is not null) MessageReceived?.Invoke(message);
-            }
-        }
-        catch (IOException)
-        {
-        }
-        finally
-        {
-            Disconnected?.Invoke();
-        }
-    }
+            case EnvelopeType.RoomList:
+                Complete(ref _pendingRoomList, envelope.Rooms ?? []);
+                break;
 
-    public static bool TryParseServerAddress(string value, out string host, out int port)
-    {
-        host = value.Trim();
-        port = DefaultPort;
-        if (host.Length == 0) return false;
+            case EnvelopeType.RoomCreated:
+                if (envelope.Room is not null) Complete(ref _pendingCreate, envelope.Room);
+                break;
 
-        var parts = host.Split(':');
-        if (parts.Length == 1)
-        {
-            host = parts[0];
-            return host.Length > 0;
-        }
-        if (parts.Length == 2)
-        {
-            host = parts[0];
-            return host.Length > 0 && int.TryParse(parts[1], out port);
-        }
-        return false;
-    }
+            case EnvelopeType.Joined:
+                if (envelope.Room is not null)
+                {
+                    CurrentRoom = envelope.Room;
+                    Complete(ref _pendingJoin, (envelope.Room, envelope.Members ?? []));
+                }
+                break;
 
-    public ValueTask DisposeAsync()
-    {
-        _writer?.Dispose();
-        _client?.Dispose();
-        return ValueTask.CompletedTask;
-    }
+            case EnvelopeType.JoinDenied:
+                Fail(ref _pendingJoin, new UnauthorizedAccessException(envelope.Reason ?? "Join denied."));
+                break;
 
-    public Guid GetRoomIdByName(string roomName)
-    {
-        var room = Rooms.FirstOrDefault(r => r.Name.Equals(roomName, StringComparison.OrdinalIgnoreCase));
-        if (room is null)
-            throw new ArgumentException($"Room with name '{roomName}' not found.", nameof(roomName));
-        return room.Id;
-    }
+            case EnvelopeType.ChatMessage:
+                MessageReceived?.Invoke(envelope.UserName ?? "?", envelope.Text ?? "");
+                break;
 
-    public Room GetRoomById(Guid roomId)
-    {
-        var room = Rooms.FirstOrDefault(r => r.Id == roomId);
-        if (room is null)
-            throw new ArgumentException($"Room with ID '{roomId}' not found.", nameof(roomId));
-        return room;
-    }
+            case EnvelopeType.UserJoined:
+                if (envelope.UserName is not null) UserJoined?.Invoke(envelope.UserName);
+                break;
 
-    public void JoinRoom(Guid roomId, string userName, int? code)
-    {
-        var room = GetRoomById(roomId);
-        if (!room.Members.Contains(userName))
-        {
-            if (room.Code is not null && room.Code != code)
-                throw new UnauthorizedAccessException("Incorrect code for private room.");
-            room.Members.Add(userName);
+            case EnvelopeType.UserLeft:
+                if (envelope.UserName is not null) UserLeft?.Invoke(envelope.UserName);
+                break;
+
+            case EnvelopeType.Error:
+                FailPending(new InvalidOperationException(envelope.Reason ?? "Server error."));
+                break;
         }
     }
 
+    private void OnClosed()
+    {
+        FailPending(new IOException("Disconnected from server."));
+        Disconnected?.Invoke();
+    }
+
+    private static Task<T> NewRequest<T>(out TaskCompletionSource<T> slot)
+    {
+        slot = new TaskCompletionSource<T>(TaskCreationOptions.RunContinuationsAsynchronously);
+        return slot.Task;
+    }
+
+    private static void Complete<T>(ref TaskCompletionSource<T>? slot, T value)
+    {
+        var pending = slot;
+        slot = null;
+        pending?.TrySetResult(value);
+    }
+
+    private static void Fail<T>(ref TaskCompletionSource<T>? slot, Exception error)
+    {
+        var pending = slot;
+        slot = null;
+        pending?.TrySetException(error);
+    }
+
+    private void FailPending(Exception error)
+    {
+        Fail(ref _pendingRoomList, error);
+        Fail(ref _pendingCreate, error);
+        Fail(ref _pendingJoin, error);
+    }
+
+    public ValueTask DisposeAsync() => _connection.DisposeAsync();
 }
