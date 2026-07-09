@@ -6,6 +6,7 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <RootNamespace>Chat</RootNamespace>
+    <AssemblyName>hollow-chat</AssemblyName>
   </PropertyGroup>
 
   <ItemGroup>

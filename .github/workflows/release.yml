@@ -46,7 +46,6 @@ jobs:
             -p:PublishSingleFile=true \
             -p:IncludeNativeLibrariesForSelfExtract=true \
             -p:EnableCompressionInSingleFile=true \
-            -p:AssemblyName=hollow-chat \
             -p:DebugType=none \
             -o "publish/${{ matrix.rid }}"
 

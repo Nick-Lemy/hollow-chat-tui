@@ -41,7 +41,7 @@ public sealed class ChatWindow : IDisposable
 
         var roomsPanel = new FrameView
         {
-            Title = "Rooms",
+            Title = "Rooms (click or F6)",
             X = 0, Y = 0,
             Width = 26,
             Height = Dim.Fill(),
@@ -81,7 +81,7 @@ public sealed class ChatWindow : IDisposable
 
         var inputPanel = new FrameView
         {
-            Title = "Type a message (Enter to send)",
+            Title = "Message (Enter to send, F6 for rooms)",
             X = Pos.Right(roomsPanel), Y = Pos.Bottom(_messages.View),
             Width = Dim.Fill(),
             Height = Dim.Fill(),
@@ -121,12 +121,29 @@ public sealed class ChatWindow : IDisposable
         _input.Accepting += OnInputAccepted;
         _newRoom.Accepting += OnNewRoomClicked;
         _roomsList.ValueChanged += OnRoomSelected;
+        _roomsList.Accepting += OnRoomAccepted;
     }
 
     private void OnRoomSelected(object? sender, ValueChangedEventArgs<int?> e)
     {
         if (_suppressSelection || _switching) return;
-        if (e.NewValue is not { } index || index < 0 || index >= _rooms.Count) return;
+        if (e.NewValue is not { } index) return;
+
+        JoinRoomAt(index);
+    }
+
+    private void OnRoomAccepted(object? sender, CommandEventArgs e)
+    {
+        e.Handled = true;
+        if (_switching) return;
+        if (_roomsList.SelectedItem is not { } index) return;
+
+        JoinRoomAt(index);
+    }
+
+    private void JoinRoomAt(int index)
+    {
+        if (index < 0 || index >= _rooms.Count) return;
 
         var target = _rooms[index];
         if (target.Id == _room.Id) return;
@@ -319,6 +336,7 @@ public sealed class ChatWindow : IDisposable
         _input.Accepting -= OnInputAccepted;
         _newRoom.Accepting -= OnNewRoomClicked;
         _roomsList.ValueChanged -= OnRoomSelected;
+        _roomsList.Accepting -= OnRoomAccepted;
         _window.Dispose();
     }
 }
