@@ -91,10 +91,14 @@ public sealed class ChatWindow : IDisposable
 
         _input = new Editor
         {
-            X = 0, Y = 0,
+            X = 0,
+            Y = 0,
             Width = Dim.Fill(),
             Height = Dim.Fill(),
         };
+        _input.KeyBindings.Remove(Key.Enter);
+        _input.KeyBindings.Add(Key.Enter, Command.Accept);
+        _input.KeyBindings.Add(Key.Enter.WithShift, Command.NewLine);
         inputPanel.Add(_input);
 
         _window.Add(roomsPanel, roomPanel, _messages.View, inputPanel);
