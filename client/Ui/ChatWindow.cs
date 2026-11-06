@@ -3,6 +3,7 @@ using Terminal.Gui.App;
 using Terminal.Gui.Input;
 using Terminal.Gui.ViewBase;
 using Terminal.Gui.Views;
+using Terminal.Gui.Editor;
 using Chat.Models;
 using Chat.Services;
 
@@ -20,7 +21,7 @@ public sealed class ChatWindow : IDisposable
     private readonly Button _newRoom;
     private readonly Label _roomInfo;
     private readonly MessageView _messages;
-    private readonly TextField _input;
+    private readonly Editor _input;
 
     private readonly Dictionary<Guid, List<string>> _history = [];
     private readonly List<string> _members = [];
@@ -77,7 +78,8 @@ public sealed class ChatWindow : IDisposable
         roomPanel.Add(_roomInfo);
 
         _messages = new MessageView(
-            Pos.Right(roomsPanel), Pos.Bottom(roomPanel), Dim.Fill(), Dim.Fill(3));
+            Pos.Right(roomsPanel), Pos.Bottom(roomPanel), Dim.Fill(), Dim.Fill(5)
+        );
 
         var inputPanel = new FrameView
         {
@@ -86,10 +88,12 @@ public sealed class ChatWindow : IDisposable
             Width = Dim.Fill(),
             Height = Dim.Fill(),
         };
-        _input = new TextField
+
+        _input = new Editor
         {
             X = 0, Y = 0,
             Width = Dim.Fill(),
+            Height = Dim.Fill(),
         };
         inputPanel.Add(_input);
 
